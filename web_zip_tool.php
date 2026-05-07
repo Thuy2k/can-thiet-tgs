@@ -191,7 +191,7 @@ function deleteDirectory(string $absPath): int
     );
 
     foreach ($it as $item) {
-        if ($item->isDir(false)) {
+        if ($item->isDir()) {
             rmdir($item->getPathname());
         } else {
             unlink($item->getPathname());
