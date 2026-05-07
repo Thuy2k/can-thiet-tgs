@@ -182,6 +182,27 @@ function zipDirectory(string $sourceDir, string $outputZipPath): int
     return $count;
 }
 
+function deleteDirectory(string $absPath): int
+{
+    $count = 0;
+    $it = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($absPath, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+
+    foreach ($it as $item) {
+        if ($item->isDir(false)) {
+            rmdir($item->getPathname());
+        } else {
+            unlink($item->getPathname());
+            $count++;
+        }
+    }
+
+    rmdir($absPath);
+    return $count;
+}
+
 function listZipFiles(string $baseDir): array
 {
     $result = [];
@@ -346,6 +367,28 @@ if (isLoggedIn() && isset($_POST['action'])) {
             }
 
             $message = 'Deleted: ' . $deleteRel;
+        }
+
+        if ($action === 'delete_folder') {
+            $delRel = normalizeRelPath((string) ($_POST['delete_folder_rel'] ?? ''));
+            if ($delRel === '') {
+                throw new RuntimeException('Folder path is required.');
+            }
+
+            $confirm = (string) ($_POST['delete_folder_confirm'] ?? '');
+            if ($confirm !== $delRel) {
+                throw new RuntimeException('Confirmation text does not match. Folder NOT deleted.');
+            }
+
+            $delAbs = resolveExistingPath($baseDir, $delRel, true);
+
+            // Safety: refuse to delete the base directory itself
+            if (rtrim($delAbs, DIRECTORY_SEPARATOR) === rtrim($baseDir, DIRECTORY_SEPARATOR)) {
+                throw new RuntimeException('Deleting the base directory is not allowed.');
+            }
+
+            $count = deleteDirectory($delAbs);
+            $message = 'Deleted folder: ' . $delRel . ' (' . $count . ' files removed).';
         }
 
         if ($action === 'delete_self') {
@@ -580,7 +623,20 @@ $zipFiles = isLoggedIn() ? listZipFiles($baseDir) : [];
         </div>
 
         <div class="card">
-            <h2>4) Cleanup</h2>
+            <h2>4) Delete folder</h2>
+            <form method="post" id="deleteFolderForm" onsubmit="return confirmDeleteFolder(event)">
+                <input type="hidden" name="action" value="delete_folder">
+                <label>Folder path (relative to base)</label>
+                <input type="text" name="delete_folder_rel" id="deleteFolderRel" placeholder="wp-content/plugins/old-plugin" required>
+                <label>Type the folder path again to confirm</label>
+                <input type="text" name="delete_folder_confirm" id="deleteFolderConfirm" placeholder="Re-enter folder path">
+                <button class="btn danger" type="submit">Delete folder permanently</button>
+            </form>
+            <div class="muted" style="margin-top:6px;">All files and sub-folders will be removed. This cannot be undone.</div>
+        </div>
+
+        <div class="card">
+            <h2>5) Cleanup</h2>
             <form method="post" onsubmit="return confirm('Delete this tool file now?');">
                 <input type="hidden" name="action" value="delete_self">
                 <button class="btn danger" type="submit">Delete this script</button>
@@ -591,5 +647,28 @@ $zipFiles = isLoggedIn() ? listZipFiles($baseDir) : [];
         </div>
     <?php endif; ?>
 </div>
+<script>
+function confirmDeleteFolder(e) {
+    var rel = document.getElementById('deleteFolderRel').value.trim();
+    var confirm1 = document.getElementById('deleteFolderConfirm').value.trim();
+
+    if (rel === '') {
+        alert('Please enter a folder path.');
+        e.preventDefault();
+        return false;
+    }
+
+    if (confirm1 !== rel) {
+        alert('Confirmation text does not match the folder path.\nPlease re-enter exactly: ' + rel);
+        e.preventDefault();
+        return false;
+    }
+
+    return confirm(
+        'WARNING: This will PERMANENTLY delete the folder and ALL its contents:\n\n  ' + rel +
+        '\n\nThis cannot be undone. Are you absolutely sure?'
+    );
+}
+</script>
 </body>
 </html>
