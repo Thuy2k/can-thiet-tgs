@@ -10,6 +10,9 @@ final class PublicHtmlSecurityBackup
             throw new RuntimeException('ZipArchive extension is not available.');
         }
 
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
+
         $config = self::loadConfig();
         $publicHtml = self::resolvePublicHtmlPath($config);
         $storageRoot = self::resolveStorageRoot($config, $publicHtml);
